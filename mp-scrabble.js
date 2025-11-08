@@ -25,6 +25,12 @@ const BONUS_BOARD = [
   ["TW","","","","TL","","","","TW","","","","TL","","","TW"]
 ];
 
+const SCRABBLE_TILE_COUNTS = {
+  A: 9, B: 2, C: 2, D: 4, E: 12, F: 2, G: 3, H: 2, I: 9, J: 1,
+  K: 1, L: 4, M: 2, N: 6, O: 8, P: 2, Q: 1, R: 6, S: 4, T: 6,
+  U: 4, V: 2, W: 2, X: 1, Y: 2, Z: 1
+};
+
 function getPersistentId() {
   let persistentId = localStorage.getItem('scrabblePID');
   if (!persistentId) {
@@ -73,118 +79,6 @@ function sendSkipTurn() {
   socket.emit('skip_turn', { room: myRoom });
 }
 
-function renderGame() {
-  const boardDiv = document.getElementById('board');
-  boardDiv.innerHTML = "";
-  for (let row = 0; row < 15; row++) {
-    for (let col = 0; col < 15; col++) {
-      let cell = document.createElement('div');
-      cell.className = 'square';
-      const bonus = BONUS_BOARD[row][col];
-      if      (bonus === "TW") cell.classList.add("tw");
-      else if (bonus === "DW") cell.classList.add("dw");
-      else if (bonus === "TL") cell.classList.add("tl");
-      else if (bonus === "DL") cell.classList.add("dl");
-      else if (bonus === "CENTER") cell.classList.add("center");
-      cell.dataset.row = row;
-      cell.dataset.col = col;
-      cell.setAttribute("data-empty","true");
-
-      if (gameState.board[row][col]) {
-        cell.textContent = gameState.board[row][col];
-        cell.removeAttribute("data-empty");
-      }
-      const pendingTile = pendingPlacements.find(p=>p.row==row&&p.col==col);
-      if (pendingTile) {
-        cell.textContent = pendingTile.letter;
-        cell.removeAttribute("data-empty");
-      }
-      if (gameState.turnIdx === myRackIdx &&
-          !pendingTile && !gameState.board[row][col]) {
-        cell.ondragover = (e) => { e.preventDefault(); cell.style.background = "#eccc68"; };
-        cell.ondragleave = (e) => { e.preventDefault(); cell.style.background = ''; };
-        cell.ondrop = (e) => handleBoardDrop(e, row, col, cell);
-      }
-      if (pendingTile && gameState.turnIdx === myRackIdx) {
-        cell.draggable = true;
-        cell.style.cursor = 'grab';
-        cell.ondragstart = (e) => handlePendingTileDragStart(e, pendingTile, row, col);
-      }
-      boardDiv.appendChild(cell);
-    }
-  }
-
-  const playersDiv = document.getElementById('players');
-  playersDiv.innerHTML = "";
-  (gameState.players || []).forEach((player, idx) => {
-    let card = document.createElement('div');
-    card.className = 'player-card';
-    card.innerHTML = `<strong>${player.name}${idx === gameState.turnIdx ? " (Your turn)" : ""}</strong><br>Score: <span>${player.score||0}</span>`;
-    let rackDiv = document.createElement('div');
-    rackDiv.className = 'rack';
-    if (idx === myRackIdx) {
-      player.rack.forEach((letter, tIdx) => {
-        if (pendingPlacements.some(p => p.rackIdx === tIdx)) return;
-        const tile = document.createElement('div');
-        tile.className = 'tile';
-        tile.textContent = letter;
-        tile.draggable = true;
-        tile.dataset.letter = letter;
-        tile.dataset.rackIdx = tIdx;
-        tile.ondragstart = (e) => handleTileDragStart(e, letter, tIdx);
-        rackDiv.appendChild(tile);
-      });
-      rackDiv.ondragover = (e) => { e.preventDefault(); rackDiv.style.background = "#eccc68"; };
-      rackDiv.ondragleave = () => rackDiv.style.background = "";
-      rackDiv.ondrop = (e) => handleRackDrop(e, rackDiv);
-    } else {
-      for (let i=0; i<player.rack.length;i++) {
-        const tile = document.createElement('div');
-        tile.className = 'tile hidden';
-        tile.textContent = '•';
-        rackDiv.appendChild(tile);
-      }
-    }
-    card.appendChild(rackDiv);
-    playersDiv.appendChild(card);
-  });
-
-  const actions = document.getElementById('actions');
-  actions.innerHTML = "";
-  if (gameState.turnIdx === myRackIdx) {
-    let scoreObj = calculateWordScore(gameState.board, pendingPlacements);
-
-    let scoreSpan = document.createElement('span');
-    scoreSpan.id = "scorePreview";
-    scoreSpan.style.marginRight = "18px";
-    if (pendingPlacements.length > 0) {
-      let cwStr = scoreObj.crossWords && scoreObj.crossWords.length
-        ? ` + Cross: ${scoreObj.crossScores}` : '';
-      scoreSpan.textContent =
-        `Score: ${scoreObj.mainScore}${cwStr} → Turn Total: ${scoreObj.total}`;
-    } else {
-      scoreSpan.textContent = '';
-    }
-    actions.appendChild(scoreSpan);
-
-    let playBtn = document.createElement('button');
-    playBtn.textContent = "Submit Move";
-    playBtn.onclick = sendMove;
-    playBtn.disabled = pendingPlacements.length === 0;
-    actions.appendChild(playBtn);
-
-    let cancelBtn = document.createElement('button');
-    cancelBtn.textContent = "Clear Move";
-    cancelBtn.onclick = () => { pendingPlacements = []; renderGame(); };
-    actions.appendChild(cancelBtn);
-
-    let skipBtn = document.createElement('button');
-    skipBtn.textContent = "Skip Turn";
-    skipBtn.onclick = sendSkipTurn;
-    actions.appendChild(skipBtn);
-  }
-}
-
 function handleTileDragStart(e, letter, rackIdx) {
   e.dataTransfer.setData("type", "rack");
   e.dataTransfer.setData("letter", letter);
@@ -205,16 +99,18 @@ function handleBoardDrop(e, row, col, cell) {
   const type = e.dataTransfer.getData("type");
   const letter = e.dataTransfer.getData("letter");
   const rackIdx = parseInt(e.dataTransfer.getData("rackIdx"));
-  if (gameState.board[row][col] || pendingPlacements.find(p=>p.row===row&&p.col===col)) return;
+  if (gameState.board[row][col] || pendingPlacements.find(p => p.row === row && p.col === col)) return;
   if (type === "rack") {
-    pendingPlacements.push({row,col,letter,rackIdx});
+    pendingPlacements.push({ row, col, letter, rackIdx });
   } else if (type === "pending") {
     const fromRow = parseInt(e.dataTransfer.getData("fromRow"));
     const fromCol = parseInt(e.dataTransfer.getData("fromCol"));
     const i = pendingPlacements.findIndex(
       p => p.row === fromRow && p.col === fromCol && p.rackIdx === rackIdx
     );
-    if (i >= 0) pendingPlacements.splice(i, 1, {row, col, letter, rackIdx});
+    if (i >= 0) {
+      pendingPlacements.splice(i, 1, { row, col, letter, rackIdx });
+    }
   }
   renderGame();
 }
@@ -255,7 +151,6 @@ function scoreOneWord(wordTiles) {
 }
 
 function getFullWordTiles(board, placements) {
-  if (!placements.length) return [];
   const coords = placements.map(p => [p.row, p.col]);
   const allSameRow = coords.every(([r,_]) => r === coords[0][0]);
   const allSameCol = coords.every(([_,c]) => c === coords[0][1]);
@@ -343,6 +238,7 @@ function calculateWordScore(board, placements) {
   let mainWordTiles = getFullWordTiles(board, placements);
   let mainScore = scoreOneWord(mainWordTiles);
 
+  // Crosswords from new tiles
   const coords = placements.map(p => [p.row, p.col]);
   const allSameRow = coords.every(([r,_]) => r === coords[0][0]);
   const allSameCol = coords.every(([_,c]) => c === coords[0][1]);
@@ -350,9 +246,145 @@ function calculateWordScore(board, placements) {
 
   let crossScores = 0;
   for (const {word, tiles} of crossWords) {
-    if ((allSameRow && tiles.every(t=>t.row===coords[0][0])) ||
-        (allSameCol && tiles.every(t=>t.col===coords[0][1]))) continue;
+    if ((allSameRow && tiles.every(t => t.row === coords[0][0])) ||
+        (allSameCol && tiles.every(t => t.col === coords[0][1]))) continue;
     crossScores += scoreOneWord(tiles);
   }
   return {mainScore, crossScores, total: mainScore + crossScores, crossWords};
 }
+
+function renderGame() {
+  // Board rendering
+  const boardDiv = document.getElementById('board');
+  boardDiv.innerHTML = "";
+  for (let row = 0; row < 15; row++) {
+    for (let col = 0; col < 15; col++) {
+      let cell = document.createElement('div');
+      cell.className = 'square';
+      const bonus = BONUS_BOARD[row][col];
+      if      (bonus === "TW") cell.classList.add("tw");
+      else if (bonus === "DW") cell.classList.add("dw");
+      else if (bonus === "TL") cell.classList.add("tl");
+      else if (bonus === "DL") cell.classList.add("dl");
+      else if (bonus === "CENTER") cell.classList.add("center");
+      cell.dataset.row = row;
+      cell.dataset.col = col;
+      cell.setAttribute("data-empty","true");
+
+      if (gameState.board[row][col]) {
+        cell.textContent = gameState.board[row][col];
+        cell.removeAttribute("data-empty");
+      }
+      const pendingTile = pendingPlacements.find(p=>p.row==row&&p.col==col);
+      if (pendingTile) {
+        cell.textContent = pendingTile.letter;
+        cell.removeAttribute("data-empty");
+      }
+      if (gameState.turnIdx === myRackIdx &&
+          !pendingTile && !gameState.board[row][col]) {
+        cell.ondragover = (e) => { e.preventDefault(); cell.style.background = "#eccc68"; };
+        cell.ondragleave = (e) => { e.preventDefault(); cell.style.background = ''; };
+        cell.ondrop = (e) => handleBoardDrop(e, row, col, cell);
+      }
+      if (pendingTile && gameState.turnIdx === myRackIdx) {
+        cell.draggable = true;
+        cell.style.cursor = 'grab';
+        cell.ondragstart = (e) => handlePendingTileDragStart(e, pendingTile, row, col);
+      }
+      boardDiv.appendChild(cell);
+    }
+  }
+
+  // YOUR RACK - bottom center (guarantee 7 slots with blanks if needed)
+  const myRackDiv = document.getElementById('my-rack');
+  myRackDiv.innerHTML = '';
+  if (gameState.players && gameState.players[myRackIdx]) {
+    const myPlayer = gameState.players[myRackIdx];
+    for (let idx = 0; idx < 7; idx++) {
+      const letter = myPlayer.rack[idx];
+      const isPending = pendingPlacements.some(p => p.rackIdx === idx);
+      if (letter === null || isPending) {
+        // Blank: preserve shape
+        const blankTile = document.createElement('div');
+        blankTile.className = 'tile my-rack';
+        blankTile.style.opacity = '0.3';
+        blankTile.textContent = '';
+        myRackDiv.appendChild(blankTile);
+      } else {
+        const tile = document.createElement('div');
+        tile.className = 'tile my-rack';
+        tile.textContent = letter;
+        tile.draggable = true;
+        tile.dataset.letter = letter;
+        tile.dataset.rackIdx = idx;
+        tile.ondragstart = (e) => handleTileDragStart(e, letter, idx);
+        myRackDiv.appendChild(tile);
+      }
+    }
+    myRackDiv.ondragover = (e) => { e.preventDefault(); myRackDiv.style.background = "#eccc68"; };
+    myRackDiv.ondragleave = () => myRackDiv.style.background = "";
+    myRackDiv.ondrop = (e) => handleRackDrop(e, myRackDiv);
+  }
+
+  // ALL PLAYERS TRACKER - bottom right (including your own score)
+  const trackerDiv = document.getElementById('player-tracker');
+  trackerDiv.innerHTML = '';
+  (gameState.players || []).forEach((player, idx) => {
+    const isMe = (idx === myRackIdx);
+    const turnActive = (idx === gameState.turnIdx);
+    const pDiv = document.createElement('div');
+    pDiv.className = 'player-status' + (turnActive ? ' active' : '');
+    pDiv.innerHTML = `
+      ${isMe ? '<span style="color:#0b8;">You</span>' : player.name}
+      ${turnActive ? ' 🔵' : ''}
+      <span style="margin-left:8px;color:#444;">Score: ${player.score||0}</span>
+    `;
+    trackerDiv.appendChild(pDiv);
+  });
+
+  // Right-side Actions panel
+  const actionsPanel = document.getElementById('actions-panel');
+  actionsPanel.innerHTML = "";
+  if (gameState.turnIdx === myRackIdx) {
+    let scoreObj = calculateWordScore(gameState.board, pendingPlacements);
+
+    let scoreSpan = document.createElement('div');
+    scoreSpan.className = "score-preview";
+    if (pendingPlacements.length > 0) {
+      let cwStr = scoreObj.crossWords && scoreObj.crossWords.length
+        ? ` + Cross: ${scoreObj.crossScores}` : '';
+      scoreSpan.textContent =
+        `Score: ${scoreObj.mainScore}${cwStr} → Turn Total: ${scoreObj.total}`;
+    } else {
+      scoreSpan.textContent = '';
+    }
+    actionsPanel.appendChild(scoreSpan);
+
+    let playBtn = document.createElement('button');
+    playBtn.textContent = "Submit Move";
+    playBtn.onclick = sendMove;
+    playBtn.disabled = pendingPlacements.length === 0;
+    actionsPanel.appendChild(playBtn);
+
+    let cancelBtn = document.createElement('button');
+    cancelBtn.textContent = "Clear Move";
+    cancelBtn.onclick = () => { pendingPlacements = []; renderGame(); };
+    actionsPanel.appendChild(cancelBtn);
+
+    let skipBtn = document.createElement('button');
+    skipBtn.textContent = "Skip Turn";
+    skipBtn.onclick = sendSkipTurn;
+    actionsPanel.appendChild(skipBtn);
+  }
+}
+
+// Real Scrabble points
+const LETTER_POINTS = {
+  'A': 1, 'B': 3, 'C': 3, 'D': 2, 'E': 1, 'F': 4, 'G': 2, 'H': 4, 'I': 1,
+  'J': 8, 'K': 5, 'L': 1, 'M': 3, 'N': 1, 'O': 1, 'P': 3, 'Q': 10, 'R': 1, 
+  'S': 1, 'T': 1, 'U': 1, 'V': 4, 'W': 4, 'X': 8, 'Y': 4, 'Z': 10
+};
+
+window.onload = () => {
+  renderGame();
+};
