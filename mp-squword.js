@@ -48,7 +48,7 @@ function joinGame() {
   document.getElementById('conn-status').textContent = "Joining room...";
   // Read optional game settings (first player can override)
   const boardSize = parseInt(document.getElementById('boardSize')?.value || '15');
-  const rounds = parseInt(document.getElementById('rounds')?.value || '30');
+  const rounds = parseInt(document.getElementById('rounds')?.value || '12');
   const joinCode = (document.getElementById('joinCode') && document.getElementById('joinCode').value) || undefined;
   socket.emit('join', {room: myRoom, name: myName, persistentId, boardSize, rounds, joinCode});
 }
@@ -97,7 +97,7 @@ socket.on('game_update', state => {
   try {
     const imMyTurn = gameState.turnIdx === myRackIdx;
     const isFinalPhaseLastTurn = gameState.finalPhase && imMyTurn && (gameState.finalRemaining === 1);
-    const isRoundLimitLastTurn = imMyTurn && (gameState.rounds >= ((gameState.maxRounds || 30) - 1));
+    const isRoundLimitLastTurn = imMyTurn && (gameState.rounds >= ((gameState.maxRounds || 12) - 1));
     if ((isFinalPhaseLastTurn || isRoundLimitLastTurn) && !hasSeenLastTurnPopup) {
       hasSeenLastTurnPopup = true;
       alert('This is your last turn before the game ends.');
