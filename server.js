@@ -13,6 +13,53 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// Disable the X-Powered-By header to avoid revealing Express usage
+app.disable('x-powered-by');
+
+// Security headers middleware - follows OWASP Secure Headers best practices
+app.use((req, res, next) => {
+  // HSTS: only send when connection is known to be secure
+  const isSecure = req.secure || (req.headers['x-forwarded-proto'] === 'https');
+  if (isSecure) {
+    // 2 years, include subdomains, allow preload
+    res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+  }
+
+  // Prevent MIME-type sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Prevent clickjacking
+  res.setHeader('X-Frame-Options', 'DENY');
+  // Referrer policy
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Permissions policy (disable powerful features by default)
+  res.setHeader('Permissions-Policy', "camera=(), microphone=(), geolocation=(), interest-cohort=()");
+  // IE/Edge download option
+  res.setHeader('X-Download-Options', 'noopen');
+  // Cross-origin resource policy
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  // Cross-origin opener policy
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+
+  // Content Security Policy - reasonably strict for this app
+  // - allow same-origin for everything
+  // - allow inline styles/scripts where necessary (keeps compatibility with simple apps)
+  // - allow data: for images
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "connect-src 'self' ws: wss:",
+    "object-src 'none'",
+    "form-action 'self'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'"
+  ].join('; ');
+  res.setHeader('Content-Security-Policy', csp);
+
+  next();
+});
+
 const BOARD_SIZE = 15;
 const MAX_ROUNDS = 12;
 // Simple in-memory cache for word definitions to avoid repeated external calls
