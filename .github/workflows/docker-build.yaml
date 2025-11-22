@@ -46,8 +46,7 @@ jobs:
         id: push_squword
         uses: docker/build-push-action@v5
         with:
-          context: docker/squword
           platforms: linux/amd64, linux/arm64
           push: true
-          tags: ghcr.io/hippogriffin/ubuntu-2204-squword:${{ steps.prep.outputs.BUILD_ID }}
+          tags: ghcr.io/hippogriffin/squword:${{ steps.prep.outputs.BUILD_ID }}
       
