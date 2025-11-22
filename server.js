@@ -3,14 +3,22 @@ const http = require("http");
 const { Server } = require("socket.io");
 const { Low } = require('lowdb');
 const { JSONFile } = require('lowdb/node');
-const db = new Low(new JSONFile('scrabble-db.json'), { games: {} });
+// Allow DB file path to be overridden via environment variable so container
+// users can mount a volume (e.g. /data) for persistence. Default remains
+// 'scrabble-db.json' in the working directory for backward compatibility.
+const DB_PATH = process.env.SCRABBLE_DB || 'scrabble-db.json';
+const db = new Low(new JSONFile(DB_PATH), { games: {} });
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 const BOARD_SIZE = 15;
-const MAX_ROUNDS = 30;
+const MAX_ROUNDS = 12;
+// Simple in-memory cache for word definitions to avoid repeated external calls
+// Cache entries have a TTL so definitions refresh periodically.
+const DEF_CACHE_TTL_MS = Number(process.env.DEF_CACHE_TTL_MS) || (24 * 60 * 60 * 1000); // 24h default
+const definitionCache = new Map(); // word -> { defs: [...], ts: Date.now() }
 const LETTER_POINTS = {
   'A': 1, 'B': 3, 'C': 3, 'D': 2, 'E': 1, 'F': 4, 'G': 2, 'H': 4, 'I': 1,
   'J': 8, 'K': 5, 'L': 1, 'M': 3, 'N': 1, 'O': 1, 'P': 3, 'Q': 10, 'R': 1, 'S': 1,
@@ -34,7 +42,7 @@ const BONUS_BOARD = [
   ["TW","","","","TL","","","","TW","","","","TL","","","TW"]
 ];
 
-function generateJoinCode(length = 6) {
+function generateJoinCode(length = 8) {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // avoid ambiguous chars
   let code = '';
   for (let i = 0; i < length; i++) code += chars[Math.floor(Math.random() * chars.length)];
@@ -260,12 +268,16 @@ io.on("connection", (socket) => {
       for (const cw of getCrossWords(game.board, placements)) {
         if (cw.word.length > 1) wordsToCheck.push(cw.word);
       }
+      const definitions = {};
       for (const word of wordsToCheck) {
-        const valid = await isValidWordAPI(word);
-        if (!valid) {
+        const defs = await isValidWordAPI(word);
+        if (!defs) {
           socket.emit("move_result",{ok:false,msg:`'${word}' not valid!`}); return false;
         }
+        definitions[word] = defs;
       }
+      // Store last validated words' definitions on the game so clients can display them
+      game.lastDefinitions = definitions;
       return true;
     }
 
@@ -608,16 +620,42 @@ function calculateWordScore(board, placements) {
 }
 
 async function isValidWordAPI(word) {
+  const key = String(word).toLowerCase();
+  const now = Date.now();
+  const cached = definitionCache.get(key);
+  if (cached && (now - cached.ts) < DEF_CACHE_TTL_MS) {
+    return cached.defs;
+  }
   const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
   try {
-    const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`);
-    if (response.ok) {
-      return true;
-    } else {
-      return false;
+    const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(key)}`);
+    if (!response.ok) {
+      definitionCache.set(key, { defs: null, ts: now });
+      return null;
     }
-  } catch {
-    return false;
+    const data = await response.json();
+    // Extract simple definitions: an array of short definition strings
+    const defs = [];
+    if (Array.isArray(data)) {
+      for (const entry of data) {
+        if (entry.meanings && Array.isArray(entry.meanings)) {
+          for (const meaning of entry.meanings) {
+            if (meaning.definitions && Array.isArray(meaning.definitions)) {
+              for (const d of meaning.definitions) {
+                if (d.definition) defs.push(d.definition);
+              }
+            }
+          }
+        }
+      }
+    }
+    const out = defs.length ? defs : null;
+    definitionCache.set(key, { defs: out, ts: now });
+    return out;
+  } catch (err) {
+    // Cache negative result for a short time to avoid repeated failures
+    definitionCache.set(key, { defs: null, ts: now });
+    return null;
   }
 }
 
@@ -634,6 +672,8 @@ function broadcastGame(room) {
       score: p.score
     })),
     joinCode: game.joinCode || null,
+    // lastDefinitions contains word -> [definitions] populated when server validates words
+    lastDefinitions: game.lastDefinitions || {},
     rounds: game.rounds || 0,
     maxRounds: game.maxRounds || MAX_ROUNDS,
     finalPhase: game.finalPhase || false,

@@ -79,6 +79,40 @@ h1 {
   justify-content: center;
 }
 
+/* Left-side definition box shown next to the board */
+.definition-box {
+  /* let the left-panel control absolute positioning; this box should flow inside it */
+  width: 260px;
+  max-height: 60vh;
+  overflow: auto;
+  background: rgba(255,255,255,0.98);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 2px 12px #0002;
+  z-index: 1000;
+  font-size: 14px;
+}
+.definition-box #definition-content { margin-top: 8px; font-size: 13px; color:#223; }
+
+/* Left panel wrapper to stack definition and legend */
+.left-panel { display:flex; flex-direction: column; gap: 12px; position: absolute; left: 26px; top: 200px; z-index: 1000; }
+
+.legend-box {
+  width: 260px;
+  background: rgba(255,255,255,0.98);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 2px 12px #0002;
+  font-size: 13px;
+}
+.left-panel .legend-row { display:flex !important; align-items:center !important; gap:10px !important; margin-bottom:6px !important; }
+.left-panel .legend-swatch { width:18px; height:18px; border-radius:4px; display:inline-block !important; border:2px solid #ccc !important; }
+.legend-swatch.tw { background: #c5003a; color:#fff; }
+.legend-swatch.dw { background: #f99fc9; }
+.legend-swatch.tl { background: #0b45a1; color:#fff; }
+.legend-swatch.dl { background: #51adf6; border: 2px solid #2b8fcc; box-shadow: 0 1px 0 rgba(0,0,0,0.08); }
+.legend-swatch.center { background: #fde64d; }
+
 /* Board and squares */
 #board {
   display: grid;

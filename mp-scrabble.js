@@ -512,6 +512,40 @@ function renderGame() {
       trackerDiv.appendChild(jcWrap);
     }
   } catch (e) {}
+  // Display definitions (if the server provided them during last validation)
+  try {
+    const defBox = document.getElementById('definition-content');
+    if (defBox) {
+      defBox.innerHTML = '';
+      if (gameState.lastDefinitions && Object.keys(gameState.lastDefinitions).length > 0) {
+        for (const [word, defs] of Object.entries(gameState.lastDefinitions)) {
+          const w = document.createElement('div');
+          w.className = 'def-word';
+          const title = document.createElement('div');
+          title.style.fontWeight = '700';
+          title.textContent = word;
+          w.appendChild(title);
+          if (Array.isArray(defs) && defs.length > 0) {
+            const ul = document.createElement('ul');
+            ul.style.margin = '6px 0 12px 18px';
+            for (let i = 0; i < Math.min(defs.length, 4); i++) {
+              const li = document.createElement('li');
+              li.textContent = defs[i];
+              ul.appendChild(li);
+            }
+            w.appendChild(ul);
+          } else {
+            const none = document.createElement('div');
+            none.textContent = 'Definition not found.';
+            w.appendChild(none);
+          }
+          defBox.appendChild(w);
+        }
+      } else {
+        defBox.textContent = 'No word checked yet.';
+      }
+    }
+  } catch (e) { /* don't let UI rendering errors break the game */ }
   (gameState.players || []).forEach((player, idx) => {
     const isMe = (idx === myRackIdx);
     const turnActive = (idx === gameState.turnIdx);

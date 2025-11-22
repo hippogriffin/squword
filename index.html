@@ -2,11 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Multiplayer Scrabble</title>
+  <title>Squword</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>Scrabble Multiplayer</h1>
+  <h1>Squword</h1>
+  <style>
+    /* center the heading and subtitle */
+    h1, h5.subtitle { text-align: center; margin: 0; }
+    h5.subtitle { margin-top: 0.25rem; font-weight: normal; color: #555; }
+  </style>
+  <h5 class="subtitle">It's a square with words</h5>
   <div id="connection-area">
     <div class="join-card" role="region" aria-label="Join game">
       <h2>Join or Create a Game</h2>
@@ -36,6 +42,16 @@
   </div>
   <div id="game" style="display:none">
     <div id="board-area">
+      <div id="left-panel" class="left-panel">
+        <div id="definition-box" class="definition-box" aria-live="polite">Dictionary: <div id="definition-content">No word checked yet.</div></div>
+        <div id="legend-box" class="legend-box" aria-hidden="false">
+          <span style="font-weight:700;margin-bottom:6px;display:block;">Legend</span>
+          <span class="legend-row"><span class="legend-swatch tw"></span> Triple Word (TW)</span>
+          <span class="legend-row"><span class="legend-swatch dw"></span> Double Word (DW)</span>
+          <span class="legend-row"><span class="legend-swatch tl"></span> Triple Letter (TL)</span>
+          <span class="legend-row"><span class="legend-swatch dl"></span> Double Letter (DL)</span>
+        </div>
+      </div>
       <div id="board"></div>
     </div>
     <div id="actions-panel"></div>
@@ -52,6 +68,5 @@
       <button id="end-close">Close</button>
     </div>
   </div>
-  <div id="actions-panel"></div>
 </body>
 </html>
