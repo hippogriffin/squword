@@ -12,6 +12,6 @@
     "socket.io-client": "4.8.3"
   },
   "resolutions": {
-    "qs": "6.15.3"
+    "qs": "6.16.0"
   }
 }
